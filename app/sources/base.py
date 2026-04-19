@@ -11,7 +11,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.models import RawItem
 from app.utils.text import compact_whitespace
-from app.utils.urls import absolute_url
+from app.utils.urls import absolute_url, is_probable_image_url
 
 log = structlog.get_logger()
 
@@ -46,6 +46,9 @@ class BaseSource(ABC):
         response = self.get(url or self.config.base_url)
         return BeautifulSoup(response.text, "html.parser")
 
+    def soup_from_html(self, html: str) -> BeautifulSoup:
+        return BeautifulSoup(html, "html.parser")
+
     def extract_text(self, node: Any, selector: str | None = None) -> str:
         if node is None:
             return ""
@@ -57,10 +60,32 @@ class BaseSource(ABC):
         href = selected.get("href") if selected else None
         return absolute_url(self.config.base_url, href or "")
 
+    def extract_image_url(self, node: Any) -> str:
+        if node is None:
+            return ""
+        for selector in ("img", "picture img", "[data-src]", "[data-lazy-src]", "[style]"):
+            selected = node.select_one(selector) if selector != "[style]" else node
+            if not selected:
+                continue
+            candidates = [
+                selected.get("src"),
+                selected.get("data-src"),
+                selected.get("data-lazy-src"),
+                selected.get("data-original"),
+                selected.get("data-img"),
+            ]
+            srcset = selected.get("srcset") or selected.get("data-srcset")
+            if srcset:
+                candidates.extend(part.strip().split(" ")[0] for part in srcset.split(","))
+            for candidate in candidates:
+                image_url = absolute_url(self.config.base_url, candidate or "")
+                if is_probable_image_url(image_url):
+                    return image_url
+        return ""
+
     def safe_fetch(self) -> list[RawItem]:
         try:
             return self.fetch_items()
         except Exception as exc:
             log.warning("source_fetch_failed", source=self.config.name, error=str(exc))
             return []
-

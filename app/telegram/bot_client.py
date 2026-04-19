@@ -17,6 +17,7 @@ class TelegramBotClient:
         chat_id: str,
         text: str,
         source_url: str | None = None,
+        image_url: str | None = None,
     ) -> TelegramPublishResult:
         if self.dry_run or not self._bot:
             return TelegramPublishResult(sent=False, dry_run=True, text=text, chat_id=chat_id)
@@ -25,13 +26,22 @@ class TelegramBotClient:
         if source_url:
             reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Читати джерело", url=source_url)]])
 
-        message = await self._bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=False,
-            reply_markup=reply_markup,
-        )
+        if image_url:
+            message = await self._bot.send_photo(
+                chat_id=chat_id,
+                photo=image_url,
+                caption=self._photo_caption(text, source_url),
+                parse_mode=ParseMode.HTML,
+                reply_markup=reply_markup,
+            )
+        else:
+            message = await self._bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=False,
+                reply_markup=reply_markup,
+            )
         return TelegramPublishResult(
             sent=True,
             message_id=message.message_id,
@@ -39,3 +49,10 @@ class TelegramBotClient:
             dry_run=False,
             text=text,
         )
+
+    def _photo_caption(self, text: str, source_url: str | None = None) -> str:
+        if len(text) <= 1024:
+            return text
+        suffix = f'\n\n<a href="{source_url}">Читати джерело</a>' if source_url else ""
+        limit = 1024 - len(suffix) - 3
+        return text[: max(limit, 0)].rstrip() + "..." + suffix

@@ -11,6 +11,13 @@ def absolute_url(base_url: str, url: str) -> str:
     return urljoin(base_url, url)
 
 
+def is_probable_image_url(url: str | None) -> bool:
+    if not url:
+        return False
+    lowered = url.casefold().split("?", 1)[0]
+    return lowered.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))
+
+
 def canonicalize_url(url: str) -> str:
     parsed = urlparse(url.strip())
     scheme = parsed.scheme.lower() or "https"
@@ -24,4 +31,3 @@ def canonicalize_url(url: str) -> str:
         ]
     )
     return urlunparse((scheme, netloc, path, "", query, ""))
-

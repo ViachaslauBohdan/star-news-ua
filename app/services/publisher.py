@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-
 from app.config import Settings
 from app.db import Database
 from app.models import ItemStatus, NormalizedItem, RewriteResult, TelegramPublishResult
@@ -21,11 +19,13 @@ class Publisher:
             return TelegramPublishResult(sent=False, dry_run=self.settings.dry_run, text="", chat_id=None)
 
         text = self.formatter.format_post(item, rewrite)
-        if self.settings.delayed_publish_seconds:
-            await asyncio.sleep(self.settings.delayed_publish_seconds)
-
         target_chat = self._target_chat()
-        result = await self.client.send_message(target_chat, text, source_url=item.url)
+        result = await self.client.send_message(
+            target_chat,
+            text,
+            source_url=item.url,
+            image_url=self._image_url(item),
+        )
         self.db.insert_published_post(
             discovered_item_id=item_id,
             telegram_message_id=result.message_id,
@@ -38,6 +38,14 @@ class Publisher:
         self.db.mark_item_status(item_id, ItemStatus.PUBLISHED if self.settings.auto_publish else ItemStatus.NEEDS_REVIEW)
         await self._maybe_publish_ad_slot(target_chat)
         return result
+
+    def _image_url(self, item: NormalizedItem) -> str | None:
+        raw_value = item.raw_body or ""
+        # NormalizedItem does not persist metadata yet, so the runner copies image_url into raw_body marker when present.
+        marker = "image_url="
+        if marker in raw_value:
+            return raw_value.split(marker, 1)[1].split("\n", 1)[0].strip() or None
+        return None
 
     def _target_chat(self) -> str:
         if self.settings.auto_publish:

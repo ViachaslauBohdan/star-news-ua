@@ -107,3 +107,20 @@ def test_turkey_politics_is_not_classified_as_concert() -> None:
 
     assert result.is_relevant is True
     assert result.category == "politics"
+
+
+def test_short_alias_does_not_match_inside_word() -> None:
+    engine = RelevanceEngine([TrackedEntity(name="DOVI", aliases=["DOVI", "Дові", "Дови"])], threshold=60)
+
+    result = engine.analyze(
+        RawItem(
+            source_name="Test",
+            source_url="https://example.com",
+            title="Онука Ротару в брендових луках назнімала стильний контент",
+            url="https://example.com/fashion",
+            snippet="Фото з Парижа.",
+        )
+    )
+
+    assert result.is_relevant is False
+    assert result.matched_entities == []

@@ -22,17 +22,24 @@ from app.sources import (
     concert_ua,
     glavred,
     ictv_fakty,
+    insider_ua,
     karabas,
     kontramarka,
     luxfm,
     novyny_live,
+    novyny_live_stars,
+    nv_life,
     oboz,
+    odna_hvylyna,
     one_plus_one,
     rbc_lite,
+    tabloid_pravda,
     ticketsbox,
     tsn,
     unian,
     viva,
+    ukrnet_showbiz,
+    zirki,
 )
 
 log = structlog.get_logger()
@@ -141,6 +148,8 @@ class SourceRunner:
             log.info("preview_post", title=raw.title, text=rewrite.text)
             return
 
+        if stats.published_count > 0 and self.settings.delayed_publish_seconds:
+            await asyncio.sleep(self.settings.delayed_publish_seconds)
         publish_result = await self.publisher.publish(item_id, normalized, rewrite)
         if publish_result.sent or publish_result.dry_run:
             stats.published_count += 1
@@ -164,6 +173,13 @@ class SourceRunner:
             "Glavred Stars": glavred.make_source,
             "1plus1 Star Life": one_plus_one.make_star_life_source,
             "1plus1 Show": one_plus_one.make_show_source,
+            "Tabloid Pravda": tabloid_pravda.make_source,
+            "NV Life Celebrities": nv_life.make_source,
+            "Insider UA": insider_ua.make_source,
+            "UKR.NET Show Business": ukrnet_showbiz.make_source,
+            "Novyny LIVE Stars": novyny_live_stars.make_source,
+            "Zirky Showbiz": zirki.make_source,
+            "Odna Hvylyna Showbiz": odna_hvylyna.make_source,
         }
         sources = []
         for name, row in configured.items():

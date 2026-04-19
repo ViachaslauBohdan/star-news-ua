@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from app.constants import (
     CHARITY_KEYWORDS,
     CONCERT_KEYWORDS,
@@ -119,4 +121,6 @@ class RelevanceEngine:
         normalized_alias = normalize_for_match(alias)
         if not normalized_alias:
             return False
+        if len(normalized_alias) <= 4 or " " not in normalized_alias:
+            return re.search(rf"(?<!\w){re.escape(normalized_alias)}(?!\w)", haystack, re.UNICODE) is not None
         return normalized_alias in haystack

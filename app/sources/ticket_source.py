@@ -26,6 +26,7 @@ class TicketListingSource(BaseSource):
             title = compact_whitespace(link.get_text(" ", strip=True))
             href = link.get("href") or ""
             url = absolute_url(self.config.base_url, href)
+            image_url = self.extract_image_url(link)
             if not self._looks_like_event(title, url) or url in seen_urls:
                 continue
             seen_urls.add(url)
@@ -36,7 +37,11 @@ class TicketListingSource(BaseSource):
                     title=title,
                     url=url,
                     snippet=title,
-                    metadata={"source_kind": "ticket", "category_hint": "concerts"},
+                    metadata={
+                        "source_kind": "ticket",
+                        "category_hint": "concerts",
+                        **({"image_url": image_url} if image_url else {}),
+                    },
                 )
             )
             if len(items) >= limit:
@@ -52,4 +57,3 @@ class TicketListingSource(BaseSource):
         return bool(PRICE_OR_DATE_RE.search(title)) or any(
             token in lowered_url for token in ("concert", "event", "tickets", "kvit", "afisha")
         )
-

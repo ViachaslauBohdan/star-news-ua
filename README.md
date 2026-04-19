@@ -69,7 +69,8 @@ Edit `.env` with your Telegram bot token and target chats.
 - `RELEVANCE_THRESHOLD`: Default `60`.
 - `FUZZY_DUP_THRESHOLD`: Default `88`.
 - `AD_SLOT_EVERY_N_POSTS`: Reserved monetization knob for ad placement cadence.
-- `MAX_PUBLISH_PER_RUN`: Maximum real posts per scan run. Default `2` to avoid publishing an old backlog all at once.
+- `DELAYED_PUBLISH_SECONDS`: Delay before the second and later posts in the same scan run. Default `300`, so multiple fresh posts are spaced by five minutes.
+- `MAX_PUBLISH_PER_RUN`: Maximum real posts per scan run. Default `3` to avoid publishing an old backlog all at once.
 - `ENABLE_INSTAGRAM`: Enables Instagram ingestion from a compliant provider feed or local JSON exports.
 - `INSTAGRAM_EXPORT_DIR`: Folder for JSON exports. Default `data/social/instagram`.
 - `INSTAGRAM_FEED_URL`: Optional JSON endpoint from a provider/export pipeline.
@@ -129,6 +130,13 @@ The current adapters are:
 - `Glavred Stars`
 - `1plus1 Star Life`
 - `1plus1 Show`
+- `Tabloid Pravda`
+- `NV Life Celebrities`
+- `Insider UA`
+- `UKR.NET Show Business`
+- `Novyny LIVE Stars`
+- `Zirky Showbiz`
+- `Odna Hvylyna Showbiz`
 
 RSS support is implemented in `app/sources/rss_source.py`. Selector-based HTML support is implemented in `app/sources/html_source.py`. Ticket marketplaces use `app/sources/ticket_source.py`, which scans event-like links and marks matched items as `concerts`.
 
@@ -217,6 +225,7 @@ The publisher supports:
 - HTML-safe Telegram formatting
 - source attribution
 - inline "Читати джерело" button
+- image-aware publishing: when a source provides an article/card image URL, Telegram sends a photo with the post as caption and falls back to text otherwise
 - message length guardrails
 
 Default Telegram template:

@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     relevance_threshold: int = Field(default=60, ge=0, le=100)
     fuzzy_dup_threshold: int = Field(default=88, ge=0, le=100)
     ad_slot_every_n_posts: int = Field(default=0, ge=0)
-    delayed_publish_seconds: int = Field(default=0, ge=0)
-    max_publish_per_run: int = Field(default=2, ge=0)
+    delayed_publish_seconds: int = Field(default=300, ge=0)
+    max_publish_per_run: int = Field(default=3, ge=0)
 
     db_path: Path = Path("data/app.db")
     log_level: str = "INFO"

@@ -20,6 +20,7 @@ class HTMLSource(BaseSource):
             title = self.extract_text(node, title_selector)
             url = self.extract_href(node, link_selector)
             snippet = self.extract_text(node, snippet_selector)
+            image_url = self.extract_image_url(node)
             if title and url:
                 items.append(
                     RawItem(
@@ -28,7 +29,7 @@ class HTMLSource(BaseSource):
                         title=compact_whitespace(title),
                         url=url,
                         snippet=snippet,
+                        metadata={"image_url": image_url} if image_url else {},
                     )
                 )
         return items
-
