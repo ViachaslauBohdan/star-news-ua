@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.db import Database
-from app.models import NormalizedItem
+from app.models import ItemStatus, NormalizedItem
 from app.services.dedup import DedupService
 
 
@@ -25,7 +25,8 @@ def test_exact_fingerprint_duplicate(tmp_path: Path) -> None:
     db = Database(tmp_path / "app.db")
     db.migrate()
     item = make_item("Jerry Heil показала нове фото", "https://example.com/a", "same")
-    db.insert_discovered_item(item)
+    item_id = db.insert_discovered_item(item, status=ItemStatus.PUBLISHED)
+    db.insert_published_post(item_id, 123, "@channel", "text", item.category, "Jerry Heil", item.source_name)
 
     duplicate, reason = DedupService(db).is_duplicate(item)
 
@@ -60,3 +61,32 @@ def test_duplicate_group_id_for_fuzzy_match(tmp_path: Path) -> None:
     assert result.duplicate_group_id == original_id
     assert result.reason is not None
     assert result.reason.startswith("fuzzy:")
+
+
+def test_previously_irrelevant_exact_item_can_be_reactivated(tmp_path: Path) -> None:
+    db = Database(tmp_path / "app.db")
+    db.migrate()
+    item = make_item("Бумбокс. Презентація міні-альбому", "https://concert.ua/uk/events/bumboks", "b")
+    db.insert_discovered_item(item, status=ItemStatus.IRRELEVANT)
+
+    result = DedupService(db).check_duplicate(item)
+
+    assert result.is_duplicate is False
+    assert result.reason == "reactivate:fingerprint"
+
+    reactivated_id = db.reactivate_irrelevant_item(item, status=ItemStatus.READY)
+
+    assert reactivated_id is not None
+
+
+def test_unpublished_ready_item_can_be_retried(tmp_path: Path) -> None:
+    db = Database(tmp_path / "app.db")
+    db.migrate()
+    item = make_item("Головна новина України", "https://example.com/news", "news")
+    item_id = db.insert_discovered_item(item, status=ItemStatus.READY)
+
+    result = DedupService(db).check_duplicate(item)
+
+    assert result.is_duplicate is False
+    assert result.reason == "retry:fingerprint"
+    assert result.duplicate_group_id == item_id

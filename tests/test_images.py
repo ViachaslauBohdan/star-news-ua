@@ -3,6 +3,7 @@ from app.services.extractor import Extractor
 from app.services.publisher import Publisher
 from app.sources.base import SourceConfig
 from app.sources.html_source import HTMLSource
+from app.sources.rss_source import RSSSource
 from app.telegram.bot_client import TelegramBotClient
 
 
@@ -20,6 +21,53 @@ def test_html_source_extracts_card_image() -> None:
     node = soup.select_one("article")
 
     assert source.extract_image_url(node) == "https://example.com/photo.webp"
+
+
+def test_html_source_extracts_article_meta_image() -> None:
+    source = HTMLSource(SourceConfig(name="Test", base_url="https://example.com", selectors={}))
+    soup = source.soup_from_html(
+        """
+        <html>
+          <head>
+            <meta property="og:image" content="/images/main.jpg">
+          </head>
+        </html>
+        """
+    )
+
+    assert source.extract_meta_image_url(soup, "https://example.com/news/story") == "https://example.com/images/main.jpg"
+
+
+def test_html_source_extracts_article_published_time() -> None:
+    source = HTMLSource(SourceConfig(name="Test", base_url="https://example.com", selectors={}))
+    soup = source.soup_from_html(
+        """
+        <html>
+          <head>
+            <meta property="article:published_time" content="2026-04-18T12:21:00+03:00">
+          </head>
+        </html>
+        """
+    )
+
+    published_at = source.extract_meta_published_at(soup)
+
+    assert published_at is not None
+    assert published_at.isoformat() == "2026-04-18T12:21:00+03:00"
+
+
+def test_rss_source_extracts_media_image() -> None:
+    source = RSSSource(SourceConfig(name="RSS", base_url="https://example.com/rss", selectors={}))
+    entry = {"media_content": [{"url": "https://cdn.example.com/main.png"}]}
+
+    assert source._entry_image_url(entry, "https://example.com/story") == "https://cdn.example.com/main.png"
+
+
+def test_rss_source_extracts_enclosure_image() -> None:
+    source = RSSSource(SourceConfig(name="RSS", base_url="https://example.com/rss", selectors={}))
+    entry = {"links": [{"rel": "enclosure", "type": "image/jpeg", "href": "/main.jpeg"}]}
+
+    assert source._entry_image_url(entry, "https://example.com/story") == "https://example.com/main.jpeg"
 
 
 def test_extractor_persists_image_marker() -> None:
@@ -55,7 +103,7 @@ def test_publisher_reads_image_marker() -> None:
 
     publisher = object.__new__(Publisher)
 
-    assert publisher._image_url(item) == "https://example.com/photo.jpg"
+    assert publisher._image_url(item, None) == "https://example.com/photo.jpg"
 
 
 def test_photo_caption_keeps_source_link_when_truncated() -> None:

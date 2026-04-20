@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 __pycache__/
@@ -11,4 +13,3 @@ __pycache__/
 data/*.db
 data/*.db-*
 !data/.gitkeep
-

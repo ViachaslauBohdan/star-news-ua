@@ -11,7 +11,7 @@ class Publisher:
     def __init__(self, settings: Settings, db: Database):
         self.settings = settings
         self.db = db
-        self.formatter = TelegramFormatter()
+        self.formatter = TelegramFormatter(settings.content_scope)
         self.client = TelegramBotClient(settings.telegram_bot_token, dry_run=settings.dry_run)
 
     async def publish(self, item_id: int, item: NormalizedItem, rewrite: RewriteResult) -> TelegramPublishResult:
@@ -20,12 +20,16 @@ class Publisher:
 
         text = self.formatter.format_post(item, rewrite)
         target_chat = self._target_chat()
-        result = await self.client.send_message(
-            target_chat,
-            text,
-            source_url=item.url,
-            image_url=self._image_url(item),
-        )
+        try:
+            result = await self.client.send_message(
+                target_chat,
+                text,
+                source_url=item.url,
+                image_url=self._image_url(item, rewrite),
+            )
+        except Exception:
+            self.db.mark_item_status(item_id, ItemStatus.FAILED)
+            raise
         self.db.insert_published_post(
             discovered_item_id=item_id,
             telegram_message_id=result.message_id,
@@ -39,8 +43,9 @@ class Publisher:
         await self._maybe_publish_ad_slot(target_chat)
         return result
 
-    def _image_url(self, item: NormalizedItem) -> str | None:
-        raw_value = item.raw_body or ""
+    def _image_url(self, item: NormalizedItem, rewrite: RewriteResult | None = None) -> str | None:
+        _ = rewrite  # image_query may be used when a resolver maps query → URL
+        raw_value = f"{item.raw_body or ''}\n{item.raw_snippet or ''}"
         # NormalizedItem does not persist metadata yet, so the runner copies image_url into raw_body marker when present.
         marker = "image_url="
         if marker in raw_value:

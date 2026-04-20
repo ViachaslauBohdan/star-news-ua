@@ -11,7 +11,7 @@ The product is designed around monetization from day one: category tagging, sour
 - Normalizes title, URL, source, date, snippet/body preview, matched people, and category.
 - Blocks exact duplicates with canonical URLs and fingerprints.
 - Blocks near-duplicates with RapidFuzz title similarity.
-- Rewrites stories into Telegram-ready Russian posts by default.
+- Rewrites stories into Telegram-ready Ukrainian posts by default.
 - Uses OpenAI when enabled, with a safe template fallback when disabled.
 - Publishes to Telegram with HTML formatting and an optional source button.
 - Stores analytics for discovered, relevant, and published content.
@@ -60,6 +60,8 @@ Edit `.env` with your Telegram bot token and target chats.
 - `TELEGRAM_CHANNEL_ID`: Public channel or chat ID for auto-publishing.
 - `TELEGRAM_ADMIN_CHAT_ID`: Admin chat for review drafts.
 - `OPENAI_API_KEY`: Optional key for AI rewriting.
+- `APP_PROFILE`: `stars` for the entertainment channel, `news` for a separate general UA news aggregator.
+- `CONTENT_SCOPE`: `stars` for entertainment-only filtering, `ukraine_news` for the broad news profile.
 - `APP_LANGUAGE`: `uk` by default. Posts should stay Ukrainian-only.
 - `DRY_RUN`: When `true`, no real Telegram messages are sent.
 - `AUTO_PUBLISH`: When `true`, posts go directly to `TELEGRAM_CHANNEL_ID`.
@@ -78,6 +80,27 @@ Edit `.env` with your Telegram bot token and target chats.
 - `DB_PATH`: Default `data/app.db`.
 - `LOG_LEVEL`: Default `INFO`.
 
+## Separate General News Channel
+
+The stars channel and the broad news channel should run as separate profiles so politics/general news never leaks into the entertainment channel.
+
+Local overlay already prepared:
+
+```bash
+python -m app.main --env-file .env.news init-db
+python -m app.main --env-file .env.news scan-once
+python -m app.main --env-file .env.news run
+```
+
+`.env.news` loads `.env` first, then overrides only the news profile values:
+
+- `APP_PROFILE=news`
+- `CONTENT_SCOPE=ukraine_news`
+- `TELEGRAM_CHANNEL_ID=@topnewsuaUKR`
+- `DB_PATH=data/news.db`
+
+The news profile enables only sources marked as the general news group and writes to its own SQLite database.
+
 ## Running Locally
 
 Initialize the database and seed default sources/entities:
@@ -90,6 +113,12 @@ Run one scan:
 
 ```bash
 python -m app.main scan-once
+```
+
+Run one scan for the separate news aggregator:
+
+```bash
+python -m app.main --env-file .env.news scan-once
 ```
 
 Run continuously:
@@ -363,7 +392,7 @@ Next:
 - redirect selected stories to SEO pages
 - track Telegram views, forwards, and reactions
 - add sponsor inventory and simple CRM tables
-- support Ukrainian and Russian post variants
+- support additional language variants only when a separate channel needs them
 - add an admin dashboard for approvals and performance
 
 ## Tests

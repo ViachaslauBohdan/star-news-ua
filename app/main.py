@@ -13,17 +13,18 @@ from app.services.source_runner import SourceRunner, run_forever
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="UA Stars Money Bot")
+    parser.add_argument("--env-file", default=None, help="Optional env overlay, for example .env.news")
     parser.add_argument("command", choices=["init-db", "scan-once", "run", "summary"], nargs="?", default="scan-once")
     return parser
 
 
 async def async_main() -> None:
     args = build_parser().parse_args()
-    settings = get_settings()
+    settings = get_settings(args.env_file)
     configure_logging(settings.log_level)
     db = Database(settings.db_path)
     db.migrate()
-    db.seed_defaults()
+    db.seed_defaults(settings.app_profile)
 
     if args.command == "init-db":
         print(f"Database initialized at {settings.db_path}")
@@ -58,4 +59,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

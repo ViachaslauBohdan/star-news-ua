@@ -75,6 +75,10 @@ class RewriteResult(BaseModel):
     hook: str
     short_title: str
     hashtags: list[str] = Field(default_factory=list)
+    image_query: str | None = Field(
+        default=None,
+        description="Пошуковий запит для зображення, якщо зі скрейпера немає image_url; не URL.",
+    )
 
 
 class TelegramPublishResult(BaseModel):

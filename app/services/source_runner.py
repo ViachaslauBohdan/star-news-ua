@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import structlog
 
@@ -71,6 +72,7 @@ class SourceRunner:
             enable_openai=settings.enable_openai,
             api_key=settings.openai_api_key,
             model=settings.openai_model,
+            content_scope=settings.content_scope,
         )
         self.publisher = Publisher(settings, db)
 
@@ -125,7 +127,19 @@ class SourceRunner:
 
         stats.relevant_count += 1
         normalized = self.extractor.normalize(raw, source_id, result)
+        if self._is_too_old_for_publishing(normalized):
+            self.db.insert_discovered_item(normalized, status=ItemStatus.IRRELEVANT)
+            stats.note(f"too_old:{raw.url}")
+            return
         duplicate = self.dedup.check_duplicate(normalized)
+        if duplicate.reason and duplicate.reason.startswith("retry:") and duplicate.duplicate_group_id:
+            if self.settings.max_publish_per_run and stats.published_count >= self.settings.max_publish_per_run:
+                stats.note(f"publish_cap_reached:{raw.url}")
+                return
+            self.db.mark_item_status(duplicate.duplicate_group_id, ItemStatus.READY)
+            stats.note(f"retry_unpublished:{raw.url}")
+            await self._rewrite_and_publish(duplicate.duplicate_group_id, normalized, stats)
+            return
         if duplicate.is_duplicate:
             normalized.duplicate_group_id = duplicate.duplicate_group_id
             normalized.is_primary_story = False
@@ -141,11 +155,17 @@ class SourceRunner:
 
         item_id = self.db.insert_discovered_item(normalized, status=ItemStatus.READY)
         if item_id is None:
-            return
+            item_id = self.db.reactivate_irrelevant_item(normalized, status=ItemStatus.READY)
+            if item_id is None:
+                return
+            stats.note(f"reactivated_previously_irrelevant:{raw.url}")
+        await self._rewrite_and_publish(item_id, normalized, stats)
+
+    async def _rewrite_and_publish(self, item_id: int, normalized, stats: RunStats) -> None:
         rewrite = self.rewriter.rewrite(normalized)
 
         if self.settings.preview_mode or not (self.settings.auto_publish or self.settings.telegram_admin_chat_id):
-            log.info("preview_post", title=raw.title, text=rewrite.text)
+            log.info("preview_post", title=normalized.title, text=rewrite.text)
             return
 
         if stats.published_count > 0 and self.settings.delayed_publish_seconds:
@@ -210,6 +230,19 @@ class SourceRunner:
                 )
             )
         return sources
+
+    def _is_too_old_for_publishing(self, item) -> bool:
+        if self.settings.max_item_age_hours <= 0:
+            return False
+        if item.category == "concerts":
+            return False
+        if item.published_at is None:
+            return self.settings.require_published_at_for_freshness
+        published_at = item.published_at
+        if published_at.tzinfo is None:
+            published_at = published_at.replace(tzinfo=UTC)
+        age_seconds = (datetime.now(UTC) - published_at.astimezone(UTC)).total_seconds()
+        return age_seconds > self.settings.max_item_age_hours * 3600
 
     def _instagram_handles(self) -> dict[str, str]:
         try:

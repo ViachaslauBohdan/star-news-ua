@@ -130,9 +130,13 @@ class Database:
         if column not in columns:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
-    def seed_defaults(self) -> None:
+    def seed_defaults(self, app_profile: str = "stars") -> None:
+        profile = app_profile.strip().lower()
         with self.connect() as conn:
             for source in DEFAULT_SOURCES:
+                default_enabled = source.get("enabled", 1)
+                if profile == "news":
+                    default_enabled = 1 if source.get("group") == "news" else 0
                 conn.execute(
                     """
                     INSERT OR IGNORE INTO sources (
@@ -145,7 +149,7 @@ class Database:
                         source["name"],
                         source["base_url"],
                         source["type"],
-                        source.get("enabled", 1),
+                        default_enabled,
                         source.get("priority", 50),
                         source.get("credibility_score", 70),
                         source.get("entertainment_bias_score", 70),
@@ -162,7 +166,7 @@ class Database:
                     (
                         source["base_url"],
                         source["type"],
-                        source.get("enabled", 1),
+                        default_enabled,
                         source.get("priority", 50),
                         source.get("credibility_score", 70),
                         source.get("entertainment_bias_score", 70),
@@ -251,6 +255,52 @@ class Database:
             except sqlite3.IntegrityError:
                 return None
 
+    def reactivate_irrelevant_item(self, item: NormalizedItem, status: ItemStatus = ItemStatus.READY) -> int | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id FROM discovered_items
+                WHERE (fingerprint = ? OR canonical_url = ?) AND status = ?
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                (item.fingerprint, item.canonical_url, ItemStatus.IRRELEVANT.value),
+            ).fetchone()
+            if not row:
+                return None
+            item_id = int(row["id"])
+            conn.execute(
+                """
+                UPDATE discovered_items
+                SET source_id = ?, title = ?, url = ?, canonical_url = ?, published_at = ?,
+                    raw_snippet = ?, raw_body = ?, matched_entities_json = ?, category = ?,
+                    fingerprint = ?, similarity_key = ?, primary_entity = ?, relevance_score = ?,
+                    relevance_explanation = ?, is_primary_story = ?, duplicate_group_id = NULL,
+                    status = ?
+                WHERE id = ?
+                """,
+                (
+                    item.source_id,
+                    item.title,
+                    item.url,
+                    item.canonical_url,
+                    item.published_at.isoformat() if item.published_at else None,
+                    item.raw_snippet,
+                    item.raw_body,
+                    json.dumps(item.matched_entities, ensure_ascii=False),
+                    item.category,
+                    item.fingerprint,
+                    item.similarity_key,
+                    item.primary_entity,
+                    item.relevance_score,
+                    item.relevance_explanation,
+                    1 if item.is_primary_story else 0,
+                    status.value,
+                    item_id,
+                ),
+            )
+            return item_id
+
     def mark_item_status(self, item_id: int, status: ItemStatus) -> None:
         with self.connect() as conn:
             conn.execute("UPDATE discovered_items SET status = ? WHERE id = ?", (status.value, item_id))
@@ -265,6 +315,11 @@ class Database:
             row = conn.execute("SELECT id FROM discovered_items WHERE fingerprint = ?", (fingerprint,)).fetchone()
         return int(row["id"]) if row else None
 
+    def item_status_by_fingerprint(self, fingerprint: str) -> str | None:
+        with self.connect() as conn:
+            row = conn.execute("SELECT status FROM discovered_items WHERE fingerprint = ?", (fingerprint,)).fetchone()
+        return str(row["status"]) if row else None
+
     def canonical_url_exists(self, canonical_url: str) -> bool:
         with self.connect() as conn:
             row = conn.execute("SELECT 1 FROM discovered_items WHERE canonical_url = ?", (canonical_url,)).fetchone()
@@ -274,6 +329,11 @@ class Database:
         with self.connect() as conn:
             row = conn.execute("SELECT id FROM discovered_items WHERE canonical_url = ?", (canonical_url,)).fetchone()
         return int(row["id"]) if row else None
+
+    def item_status_by_canonical_url(self, canonical_url: str) -> str | None:
+        with self.connect() as conn:
+            row = conn.execute("SELECT status FROM discovered_items WHERE canonical_url = ?", (canonical_url,)).fetchone()
+        return str(row["status"]) if row else None
 
     def recent_similarity_keys(self, limit: int = 500) -> list[tuple[int, str, str]]:
         with self.connect() as conn:

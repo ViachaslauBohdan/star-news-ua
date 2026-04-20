@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    app_profile: str = "stars"
     telegram_bot_token: str = ""
     telegram_channel_id: str = ""
     telegram_admin_chat_id: str = ""
@@ -28,6 +29,8 @@ class Settings(BaseSettings):
     ad_slot_every_n_posts: int = Field(default=0, ge=0)
     delayed_publish_seconds: int = Field(default=300, ge=0)
     max_publish_per_run: int = Field(default=3, ge=0)
+    max_item_age_hours: int = Field(default=0, ge=0)
+    require_published_at_for_freshness: bool = False
 
     db_path: Path = Path("data/app.db")
     log_level: str = "INFO"
@@ -39,5 +42,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
-def get_settings() -> Settings:
+def get_settings(env_file: str | Path | None = None) -> Settings:
+    if env_file:
+        return Settings(_env_file=(".env", env_file))
     return Settings()

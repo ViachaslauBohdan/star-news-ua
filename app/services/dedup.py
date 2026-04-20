@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from rapidfuzz import fuzz
 
 from app.db import Database
-from app.models import NormalizedItem
+from app.models import ItemStatus, NormalizedItem
 
 
 @dataclass(slots=True)
@@ -27,9 +27,21 @@ class DedupService:
 
     def check_duplicate(self, item: NormalizedItem) -> DuplicateCheck:
         if self.db.fingerprint_exists(item.fingerprint):
-            return DuplicateCheck(True, "fingerprint", self.db.item_id_by_fingerprint(item.fingerprint), 100)
+            item_id = self.db.item_id_by_fingerprint(item.fingerprint)
+            status = self.db.item_status_by_fingerprint(item.fingerprint)
+            if status == ItemStatus.IRRELEVANT.value:
+                return DuplicateCheck(False, "reactivate:fingerprint", item_id, 100)
+            if status in {ItemStatus.READY.value, ItemStatus.FAILED.value} and item_id and not self.db.item_already_published(item_id):
+                return DuplicateCheck(False, "retry:fingerprint", item_id, 100)
+            return DuplicateCheck(True, "fingerprint", item_id, 100)
         if self.db.canonical_url_exists(item.canonical_url):
-            return DuplicateCheck(True, "canonical_url", self.db.item_id_by_canonical_url(item.canonical_url), 100)
+            item_id = self.db.item_id_by_canonical_url(item.canonical_url)
+            status = self.db.item_status_by_canonical_url(item.canonical_url)
+            if status == ItemStatus.IRRELEVANT.value:
+                return DuplicateCheck(False, "reactivate:canonical_url", item_id, 100)
+            if status in {ItemStatus.READY.value, ItemStatus.FAILED.value} and item_id and not self.db.item_already_published(item_id):
+                return DuplicateCheck(False, "retry:canonical_url", item_id, 100)
+            return DuplicateCheck(True, "canonical_url", item_id, 100)
         for existing_id, _title, similarity_key in self.db.recent_similarity_keys():
             score = fuzz.token_set_ratio(item.similarity_key, similarity_key)
             if score >= self.fuzzy_threshold:

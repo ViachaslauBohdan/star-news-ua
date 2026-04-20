@@ -2,7 +2,7 @@ from app.models import NormalizedItem, RewriteResult
 from app.services.formatter import TelegramFormatter
 
 
-def test_formatter_escapes_html_and_adds_source_link() -> None:
+def test_formatter_escapes_html_and_preserves_final_post_layout() -> None:
     item = NormalizedItem(
         source_id=1,
         source_name="Source <Test>",
@@ -18,15 +18,14 @@ def test_formatter_escapes_html_and_adds_source_link() -> None:
     )
     rewrite = RewriteResult(
         hook="Hook <hot>",
-        text="Body & details",
+        text="⚡️ Hook <hot>\n\nBody & details\n\n👉 Деталі: https://example.com/news?a=1&b=2\n\n#новини",
         short_title="Short",
         hashtags=["#OkeanElzy", "#releases"],
     )
 
-    text = TelegramFormatter().format_post(item, rewrite)
+    text = TelegramFormatter(content_scope="other").format_post(item, rewrite)
 
     assert "&lt;hot&gt;" in text
-    assert "Source &lt;Test&gt;" in text
     assert "https://example.com/news?a=1&amp;b=2" in text
-    assert "#OkeanElzy #releases" in text
-    assert "Джерело:" in text
+    assert "\n\n" in text
+    assert "#новини" in text
