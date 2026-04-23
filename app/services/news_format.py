@@ -54,6 +54,10 @@ _BANNED_SUBSTRINGS: tuple[str, ...] = (
 )
 
 _NUMBER_RE = re.compile(r"\d[\d\s.,]*[%€$₴]?|\d+\s*(?:млн|млрд|тис|км|км²)")
+_NUMBER_WITH_UNIT_RE = re.compile(
+    r"\d[\d\s.,]*(?:\s*(?:млрд|млн|тис|мільярд(?:а|ів)?|мільйон(?:а|ів)?|євро|долар(?:а|ів)?|грн|₴|€|\$|мвт|гвт|км|%))*",
+    re.IGNORECASE,
+)
 
 _METADATA_IN_SNIPPET_RE = re.compile(
     r"(?:^|\s)(?:image_url|imageUrl|source_image_url)\s*=\s*\S+",
@@ -109,9 +113,110 @@ def _strip_leading_title_repeat(text: str, title: str) -> str:
     return cleaned.strip()
 
 
+def _norm_for_repeat_check(text: str) -> str:
+    cleaned = re.sub(r"[^\wа-яіїєґА-ЯІЇЄҐ]+", " ", text or "", flags=re.UNICODE)
+    return " ".join(cleaned.casefold().split())
+
+
+def _is_repeat_of_title(text: str, title: str) -> bool:
+    body = _norm_for_repeat_check(text)
+    head = _norm_for_repeat_check(title)
+    if not body or not head:
+        return False
+    return body == head or body in head or head in body
+
+
+def _norm_number(value: str) -> str:
+    return re.sub(r"\s+", "", (value or "").casefold().replace(".", ","))
+
+
+def _numbers_in(text: str) -> set[str]:
+    return {
+        _norm_number(match.group(0))
+        for match in _NUMBER_WITH_UNIT_RE.finditer(text or "")
+        if match.group(0).strip()
+    }
+
+
+def _remove_repeated_number_fragments(detail: str, title: str) -> str:
+    title_numbers = _numbers_in(title)
+    if not detail or not title_numbers:
+        return detail
+
+    parts = re.split(r"(\s*,\s+|\s+та\s+|\s+і\s+)", detail)
+    cleaned: list[str] = []
+    index = 0
+    while index < len(parts):
+        separator = parts[index - 1] if index > 0 else ""
+        part = parts[index]
+        if _numbers_in(part) & title_numbers:
+            if cleaned and separator.strip() in {",", "та", "і"}:
+                cleaned.pop()
+            index += 2
+            continue
+        if separator and cleaned:
+            cleaned.append(separator)
+        cleaned.append(part)
+        index += 2
+
+    out = "".join(cleaned)
+    out = re.sub(r"\s+,", ",", out)
+    out = re.sub(r",\s*,+", ",", out)
+    out = re.sub(r"\s{2,}", " ", out)
+    return out.strip(" ,;")
+
+
 def _clean_snippet_for_pair(snippet: str) -> str:
     without_meta = _METADATA_IN_SNIPPET_RE.sub(" ", snippet or "")
     return " ".join(without_meta.split())
+
+
+def _is_weak_detail_line(text: str) -> bool:
+    normalized = _norm_for_repeat_check(text)
+    if not normalized:
+        return True
+    weak = {
+        "джерела",
+        "джерело",
+        "змі",
+        "медіа",
+        "за даними джерела",
+        "як повідомляє джерело",
+        "деталі у джерелі",
+        "подія вже змінює порядок денний",
+    }
+    if normalized in {_norm_for_repeat_check(value) for value in weak}:
+        return True
+    return any(_norm_for_repeat_check(phrase) in normalized for phrase in _BANNED_SUBSTRINGS)
+
+
+def _sentences_from_text(text: str) -> list[str]:
+    normalized = _clean_snippet_for_pair(text)
+    if not normalized:
+        return []
+    parts = re.split(r"(?<=[.!?…])\s+", normalized)
+    return [part.strip(" \n\t-—|") for part in parts if part.strip(" \n\t-—|")]
+
+
+def _supporting_detail_line(title: str, facts: list[str], *raw_texts: str) -> str:
+    """Second Telegram line: a real supporting detail/dek, not a generated filler."""
+    candidates: list[str] = []
+    for raw in raw_texts:
+        cleaned = _strip_leading_title_repeat(_clean_snippet_for_pair(raw), title)
+        candidates.extend(_sentences_from_text(cleaned))
+    candidates.extend(fact for fact in facts if not _looks_pretruncated(fact))
+
+    for candidate in candidates:
+        if _looks_pretruncated(candidate):
+            continue
+        body = _remove_repeated_number_fragments(candidate, title)
+        body = _short_line(body, 190).strip()
+        if _is_weak_detail_line(body) or _is_repeat_of_title(body, title):
+            continue
+        if body and body[-1] not in ".!?…":
+            body += "."
+        return body
+    return ""
 
 
 def _fact_line_when_body_repeats_headline(title: str) -> str:
@@ -142,7 +247,7 @@ def _fact_line_when_body_repeats_headline(title: str) -> str:
                 if out[-1] not in ".!?…":
                     out += "."
                 return truncate(out, 115)
-    return "Подія вже змінює порядок денний."
+    return ""
 
 
 def _pair_facts(facts: list[str], title: str, snippet: str) -> tuple[str, str]:
@@ -161,7 +266,26 @@ def _pair_facts(facts: list[str], title: str, snippet: str) -> tuple[str, str]:
 
 
 def _short_line(text: str, max_chars: int = 82) -> str:
-    return truncate(" ".join((text or "").split()), max_chars)
+    return _complete_short_sentence(" ".join((text or "").split()), max_chars)
+
+
+def _complete_short_sentence(text: str, max_chars: int) -> str:
+    cleaned = " ".join((text or "").split()).strip(" .,…")
+    if len(cleaned) <= max_chars:
+        return cleaned
+    limit = max(24, max_chars)
+    head = cleaned[:limit].rstrip(" ,;:—-")
+    cut_at = max(head.rfind(". "), head.rfind("! "), head.rfind("? "))
+    if cut_at >= 36:
+        return _trim_dangling_tail(head[:cut_at + 1])
+    for sep in (", ", " — ", " – ", ": "):
+        cut_at = head.rfind(sep)
+        if cut_at >= 42:
+            return _trim_dangling_tail(head[:cut_at])
+    space_at = head.rfind(" ")
+    if space_at >= 42:
+        return _trim_dangling_tail(head[:space_at])
+    return ""
 
 
 def _html(value: str) -> str:
@@ -170,6 +294,50 @@ def _html(value: str) -> str:
 
 def _html_attr(value: str) -> str:
     return html.escape(value or "", quote=True)
+
+
+def _headline_candidate(text: str, max_chars: int = 86) -> str:
+    cleaned = " ".join((text or "").split()).strip(" .,…")
+    if len(cleaned) <= max_chars:
+        return cleaned
+    for sep in (": ", " — ", " – ", " - "):
+        if sep in cleaned:
+            first, rest = cleaned.split(sep, 1)
+            if 28 <= len(first) <= max_chars:
+                return first.strip(" .,…")
+            combined_words: list[str] = []
+            for word in rest.split():
+                probe = (first + sep + " ".join([*combined_words, word])).strip()
+                if len(probe) > max_chars:
+                    break
+                combined_words.append(word)
+            if combined_words:
+                return _trim_dangling_tail(first + sep + " ".join(combined_words))
+    return _complete_short_sentence(cleaned, max_chars)
+
+
+def _looks_pretruncated(text: str) -> bool:
+    stripped = (text or "").strip()
+    if "..." in stripped or "…" in stripped:
+        return True
+    words = stripped.split()
+    return bool(words and len(words[-1]) <= 3 and stripped[-1:] not in ".!?:;)")
+
+
+_DANGLING_TAIL_RE = re.compile(
+    r"\s+(?:щодо|стосовно|через|після|перед|для|про|при|без|за|на|у|в|до|від|із|з|та|і|що|того|який|яка|яке|які)(?:\s+\w{1,12}){0,2}$",
+    re.IGNORECASE,
+)
+
+
+def _trim_dangling_tail(text: str) -> str:
+    out = (text or "").strip(" .,…")
+    for _ in range(3):
+        trimmed = _DANGLING_TAIL_RE.sub("", out).strip(" .,…")
+        if trimmed == out or len(trimmed) < 28:
+            break
+        out = trimmed
+    return out
 
 
 def _reaction_headline(title: str) -> str:
@@ -185,7 +353,7 @@ def _reaction_headline(title: str) -> str:
         return "Курс знову тисне на ринок"
     if "знешкодили" in lowered and "окупант" in lowered:
         return "Втрати РФ знову пішли вгору"
-    return _short_line(cleaned.strip(" ."), 86)
+    return _headline_candidate(cleaned.strip(" ."), 86)
 
 
 def _headline_prefix(category: str, title: str) -> str:
@@ -298,8 +466,14 @@ def _consequence_line(category: str, fingerprint: str) -> str:
 
 def _detail_body(fact: str, title: str) -> str:
     body = _short_line(fact, 190).strip()
+    if _is_weak_detail_line(body):
+        body = ""
+    if _is_repeat_of_title(body, title):
+        body = ""
     if not body:
         body = _fact_line_when_body_repeats_headline(title)
+    if _is_repeat_of_title(body, title):
+        body = ""
     if body and body[-1] not in ".!?…":
         body += "."
     return body
@@ -314,11 +488,11 @@ def _source_link(item: NormalizedItem) -> str | None:
 
 def build_news_blocks(item: NormalizedItem, title: str, facts: list[str], hashtag: str) -> list[str]:
     """Telegram HTML news format for TOPNEWS UA."""
-    f1, _ = _pair_facts(facts, title, item.raw_snippet or item.raw_body or "")
+    f1, f2 = _pair_facts(facts, title, item.raw_snippet or item.raw_body or "")
     headline = _reaction_headline(title)
     prefix = _headline_prefix(item.category, title)
     lead = f"{prefix}<b>{_html(headline)}</b>" if prefix else f"<b>{_html(headline)}</b>"
-    body = _detail_body(f1, title)
+    body = _supporting_detail_line(title, [f1, f2, *facts], item.raw_snippet, item.raw_body)
     lines = [lead]
     if body:
         lines.append(_html(body))
@@ -333,7 +507,7 @@ def build_urgent_news_lines(item: NormalizedItem, title: str, facts: list[str], 
     f1 = facts[0] if facts else title
     headline = _reaction_headline(title)
     lines = [f"❗️<b>{_html(headline)}</b>"]
-    body = _detail_body(f1, title)
+    body = _supporting_detail_line(title, [*facts, f1], item.raw_snippet, item.raw_body)
     if body:
         lines.append(_html(body))
     source = _source_link(item)

@@ -7,6 +7,7 @@ python-dotenv==1.0.1
 python-telegram-bot[job-queue]==21.10
 rapidfuzz==3.11.0
 requests==2.32.3
+psycopg[binary]
 structlog==24.4.0
 tenacity==9.0.0
 pytest==8.3.4

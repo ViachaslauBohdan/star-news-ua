@@ -34,6 +34,7 @@ class BaseSource(ABC):
         self.timeout = timeout
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": user_agent})
+        self.last_fetch_error = ""
 
     @abstractmethod
     def fetch_items(self) -> list[RawItem]:
@@ -109,6 +110,22 @@ class BaseSource(ABC):
                 return image_url
         return ""
 
+    def extract_meta_description(self, soup: BeautifulSoup) -> str:
+        meta_selectors = (
+            'meta[property="og:description"]',
+            'meta[name="twitter:description"]',
+            'meta[name="description"]',
+            'meta[itemprop="description"]',
+        )
+        for selector in meta_selectors:
+            selected = soup.select_one(selector)
+            if not selected:
+                continue
+            value = compact_whitespace(selected.get("content") or selected.get_text(" ", strip=True))
+            if value:
+                return value
+        return ""
+
     def extract_meta_published_at(self, soup: BeautifulSoup) -> datetime | None:
         meta_selectors = (
             'meta[property="article:published_time"]',
@@ -162,7 +179,8 @@ class BaseSource(ABC):
             return {}
         published_at = self.extract_meta_published_at(soup)
         image_url = self.extract_meta_image_url(soup, url)
-        return {"published_at": published_at, "image_url": image_url}
+        description = self.extract_meta_description(soup)
+        return {"published_at": published_at, "image_url": image_url, "description": description}
 
     def extract_page_image_url(self, url: str) -> str:
         if not url:
@@ -174,8 +192,10 @@ class BaseSource(ABC):
             return ""
 
     def safe_fetch(self) -> list[RawItem]:
+        self.last_fetch_error = ""
         try:
             return self.fetch_items()
         except Exception as exc:
+            self.last_fetch_error = str(exc)
             log.warning("source_fetch_failed", source=self.config.name, error=str(exc))
             return []

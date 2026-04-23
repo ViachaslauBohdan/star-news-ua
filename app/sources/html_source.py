@@ -24,6 +24,7 @@ class HTMLSource(BaseSource):
             published_at = None
             if self.config.extra.get("fetch_article_metadata", True):
                 metadata = self.extract_page_metadata(url)
+                snippet = snippet or metadata.get("description") or ""
                 image_url = image_url or metadata.get("image_url") or ""
                 published_at = metadata.get("published_at")
             if title and url:
@@ -55,6 +56,7 @@ class HTMLSource(BaseSource):
             published_at = None
             if self.config.extra.get("fetch_article_metadata", True):
                 metadata = self.extract_page_metadata(url)
+                snippet = metadata.get("description") or ""
                 image_url = metadata.get("image_url") or ""
                 published_at = metadata.get("published_at")
             items.append(
@@ -64,7 +66,7 @@ class HTMLSource(BaseSource):
                     title=title,
                     url=url,
                     published_at=published_at,
-                    snippet="",
+                    snippet=snippet,
                     metadata={"image_url": image_url} if image_url else {},
                 )
             )

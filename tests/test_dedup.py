@@ -90,3 +90,16 @@ def test_unpublished_ready_item_can_be_retried(tmp_path: Path) -> None:
     assert result.is_duplicate is False
     assert result.reason == "retry:fingerprint"
     assert result.duplicate_group_id == item_id
+
+
+def test_failed_items_requeued_after_restart(tmp_path: Path) -> None:
+    db = Database(tmp_path / "app.db")
+    db.migrate()
+    item = make_item("Тестова новина", "https://example.com/retry", "retry-item")
+    item_id = db.insert_discovered_item(item, status=ItemStatus.FAILED)
+
+    changed = db.requeue_failed_items()
+
+    assert item_id is not None
+    assert changed == 1
+    assert db.item_status_by_fingerprint("retry-item") == ItemStatus.READY.value

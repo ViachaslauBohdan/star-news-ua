@@ -38,6 +38,21 @@ def test_html_source_extracts_article_meta_image() -> None:
     assert source.extract_meta_image_url(soup, "https://example.com/news/story") == "https://example.com/images/main.jpg"
 
 
+def test_html_source_extracts_article_meta_description() -> None:
+    source = HTMLSource(SourceConfig(name="Test", base_url="https://example.com", selectors={}))
+    soup = source.soup_from_html(
+        """
+        <html>
+          <head>
+            <meta property="og:description" content="Формальна письмова процедура запущена.">
+          </head>
+        </html>
+        """
+    )
+
+    assert source.extract_meta_description(soup) == "Формальна письмова процедура запущена."
+
+
 def test_html_source_extracts_article_published_time() -> None:
     source = HTMLSource(SourceConfig(name="Test", base_url="https://example.com", selectors={}))
     soup = source.soup_from_html(

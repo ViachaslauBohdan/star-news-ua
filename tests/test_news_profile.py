@@ -15,6 +15,24 @@ def test_news_profile_enables_only_general_news_sources(tmp_path: Path) -> None:
     assert enabled
     assert all(row["type"] == "news_html" for row in enabled)
     assert {row["name"] for row in enabled} >= {"Ukrainska Pravda News", "Suspilne News", "Babel News"}
+    assert "ICTV Fakty News" not in {row["name"] for row in enabled}
+
+
+def test_news_profile_can_enable_optional_telethon_sources(tmp_path: Path) -> None:
+    db = Database(tmp_path / "news.db")
+    db.migrate()
+    db.seed_defaults("news", enable_telethon_sources=True)
+
+    enabled = db.get_enabled_sources()
+    enabled_names = {row["name"] for row in enabled}
+    ictv = db.source_metadata_by_name("ICTV Fakty News")
+    rada = db.source_metadata_by_name("Rada News")
+
+    assert {"ICTV Fakty News", "1plus1 TSN Main News", "Rada News"} <= enabled_names
+    assert ictv is not None
+    assert rada is not None
+    assert ictv["priority"] < 70
+    assert rada["credibility_score"] >= 75
 
 
 def test_news_formatter_does_not_add_old_cta_wrapper() -> None:

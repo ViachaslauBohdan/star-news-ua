@@ -24,8 +24,9 @@ class RSSSource(BaseSource):
             if not image_url and snippet:
                 image_url = self.extract_image_url(self.soup_from_html(snippet))
             published_at = parse_date(entry.get("published") or entry.get("updated"))
-            if self.config.extra.get("fetch_article_metadata", True) and (not image_url or not published_at):
+            if self.config.extra.get("fetch_article_metadata", True) and (not snippet or not image_url or not published_at):
                 metadata = self.extract_page_metadata(url)
+                snippet = snippet or metadata.get("description") or ""
                 image_url = image_url or metadata.get("image_url") or ""
                 published_at = published_at or metadata.get("published_at")
             items.append(

@@ -22,9 +22,9 @@ async def async_main() -> None:
     args = build_parser().parse_args()
     settings = get_settings(args.env_file)
     configure_logging(settings.log_level)
-    db = Database(settings.db_path)
+    db = Database(settings.db_path, database_url=settings.database_url)
     db.migrate()
-    db.seed_defaults(settings.app_profile)
+    db.seed_defaults(settings.app_profile, enable_telethon_sources=settings.enable_telethon_sources)
 
     if args.command == "init-db":
         print(f"Database initialized at {settings.db_path}")
@@ -46,6 +46,7 @@ async def async_main() -> None:
                 "published_count": stats.published_count,
                 "error_count": stats.error_count,
                 "notes": stats.notes or [],
+                "source_breakdown": stats.source_breakdown_dict(),
             },
             ensure_ascii=False,
             indent=2,

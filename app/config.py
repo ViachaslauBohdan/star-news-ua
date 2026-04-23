@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     auto_publish: bool = False
     preview_mode: bool = False
     enable_instagram: bool = False
+    enable_telethon_sources: bool = False
     instagram_export_dir: Path = Path("data/social/instagram")
     instagram_feed_url: str = ""
     instagram_handles_json: str = "{}"
@@ -33,6 +34,8 @@ class Settings(BaseSettings):
     require_published_at_for_freshness: bool = False
 
     db_path: Path = Path("data/app.db")
+    database_url: str = ""
+    cron_secret: str = ""
     log_level: str = "INFO"
     http_timeout_seconds: int = Field(default=15, ge=1)
     user_agent: str = "UAStarsMoneyBot/1.0 (+https://telegram.org)"

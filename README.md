@@ -72,12 +72,14 @@ Edit `.env` with your Telegram bot token and target chats.
 - `FUZZY_DUP_THRESHOLD`: Default `88`.
 - `AD_SLOT_EVERY_N_POSTS`: Reserved monetization knob for ad placement cadence.
 - `DELAYED_PUBLISH_SECONDS`: Delay before the second and later posts in the same scan run. Default `300`, so multiple fresh posts are spaced by five minutes.
-- `MAX_PUBLISH_PER_RUN`: Maximum real posts per scan run. Default `3` to avoid publishing an old backlog all at once.
+- `MAX_PUBLISH_PER_RUN`: Publishing wave size per queue pass. Default `3`; backlog still drains continuously wave-by-wave with `DELAYED_PUBLISH_SECONDS` spacing.
 - `ENABLE_INSTAGRAM`: Enables Instagram ingestion from a compliant provider feed or local JSON exports.
 - `INSTAGRAM_EXPORT_DIR`: Folder for JSON exports. Default `data/social/instagram`.
 - `INSTAGRAM_FEED_URL`: Optional JSON endpoint from a provider/export pipeline.
 - `INSTAGRAM_HANDLES_JSON`: JSON object mapping tracked entity names to Instagram handles.
 - `DB_PATH`: Default `data/app.db`.
+- `DATABASE_URL`: Optional PostgreSQL URL (recommended for Vercel/Supabase production).
+- `CRON_SECRET`: Shared bearer token for `/api/cron` protection (`Authorization: Bearer <CRON_SECRET>`).
 - `LOG_LEVEL`: Default `INFO`.
 
 ## Separate General News Channel
@@ -100,6 +102,14 @@ python -m app.main --env-file .env.news run
 - `DB_PATH=data/news.db`
 
 The news profile enables only sources marked as the general news group and writes to its own SQLite database.
+
+Optional TV/telethon-adjacent sources can be enabled for TOPNEWS with:
+
+```env
+ENABLE_TELETHON_SOURCES=true
+```
+
+This adds lower-priority sources such as ICTV Fakty, 1+1/TSN main news, Rada, Dim/UATV, Freedom/UATV, We Ukraine, and Podrobnosti. They are intentionally separated from the default portal list so they can be disabled quickly if they become duplicate-heavy or slower than the primary web-native sources.
 
 ## Running Locally
 
@@ -353,6 +363,56 @@ Environment=PYTHONUNBUFFERED=1
 [Install]
 WantedBy=multi-user.target
 ```
+
+## Running On Vercel Cron (Every 15 Minutes)
+
+Use this mode for serverless scheduling and persistent cloud state.
+
+1) Create a Supabase project (free/cheap tier with web dashboard) and copy the Postgres connection string.
+
+2) Open Supabase SQL Editor and run `sql/schema_postgres.sql` once to bootstrap tables.
+
+3) In Vercel project environment variables, set:
+
+- `DATABASE_URL` to the Supabase Postgres connection string
+- `CRON_SECRET` to a long random value
+- Telegram/OpenAI variables you already use (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, etc.)
+- strongly recommended for serverless: `DELAYED_PUBLISH_SECONDS=0`, `MAX_PUBLISH_PER_RUN=1` (or `2`)
+
+4) Deploy with `vercel.json` included. The schedule/runtime are:
+
+- `*/15 * * * *` on path `/api/cron`
+- Python runtime pinned to `python3.12`
+- function `maxDuration` set to `60` seconds
+
+5) Vercel will call the serverless function in `api/cron.py`, which runs one `scan-once` cycle and writes state to Postgres.
+
+6) Manual verification after deploy:
+
+```bash
+curl -i \
+  -H "Authorization: Bearer <CRON_SECRET>" \
+  https://<your-vercel-domain>/api/cron
+```
+
+Expected result:
+
+- HTTP `200`
+- JSON payload with `ok=true` and run counters (`scanned_sources`, `discovered_count`, `published_count`, `duration_ms`)
+
+7) In Vercel logs confirm one scheduled run appears within the next 15 minutes.
+
+Local smoke test (without Vercel runtime):
+
+```bash
+python -m app.main scan-once
+```
+
+Production notes:
+
+- Keep `MAX_PUBLISH_PER_RUN` conservative to keep each publish wave short on serverless.
+- If you keep `DELAYED_PUBLISH_SECONDS` high, a single run may approach Vercel timeout limits.
+- Dedup uniqueness in the DB helps protect against occasional cron retries.
 
 ## Analytics
 

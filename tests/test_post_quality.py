@@ -91,6 +91,107 @@ def test_ukraine_news_posts_avoid_banned_meta_phrases() -> None:
     assert not any(p in lower for p in BANNED_UA_NEWS_PHRASES)
 
 
+def test_ukraine_news_does_not_repeat_headline_as_body() -> None:
+    title = "Франція та Польща обговорюють спільні ядерні навчання"
+    item = NormalizedItem(
+        source_name="Ukrainska Pravda News",
+        title=title,
+        url="https://example.com/france-poland",
+        canonical_url="https://example.com/france-poland",
+        raw_snippet=f"{title}.",
+        matched_entities=[],
+        category="world",
+        fingerprint="repeat01",
+        similarity_key="france poland nuclear drills",
+    )
+
+    post = render(item)
+    lines = [line.strip() for line in post.splitlines() if line.strip()]
+
+    assert title in lines[0]
+    assert all(line != f"{title}." for line in lines[1:])
+    assert post.count(title) == 1
+    assert "Дивитися в джерелі:" in post
+
+
+def test_ukraine_news_uses_real_supporting_detail_from_article() -> None:
+    title = "Посли країн ЄС схвалили кредит для України на 90 мільярдів євро та 20-й пакет санкцій"
+    detail = "Формальна письмова процедура запущена. Очікується, що вона завершиться завтра у другій половині дня."
+    item = NormalizedItem(
+        source_name="European Pravda",
+        title=title,
+        url="https://example.com/eu-credit",
+        canonical_url="https://example.com/eu-credit",
+        raw_snippet=f"{title}. {detail}",
+        matched_entities=[],
+        category="politics",
+        fingerprint="eu-credit",
+        similarity_key="eu credit sanctions",
+    )
+
+    post = render(item)
+
+    assert "Формальна письмова процедура запущена." in post
+    assert "Подія вже змінює порядок денний" not in post
+    assert "Джерела." not in post
+    assert post.count(title) == 1
+
+
+def test_ukraine_news_uses_complete_lines_without_ellipsis() -> None:
+    item = NormalizedItem(
+        source_name="Babel",
+        title="PlayCity анулювало ліцензію казино Cosmolot після рішення державного регулятора",
+        url="https://example.com/cosmolot",
+        canonical_url="https://example.com/cosmolot",
+        raw_snippet=(
+            "Державне агентство для регулювання азартних ігор і лотерей PlayCity "
+            "анулювало ліцензію онлайн-казино Cosmolot через порушення правил ринку."
+        ),
+        matched_entities=[],
+        category="economy",
+        fingerprint="cosmolot-license",
+        similarity_key="cosmolot license",
+    )
+
+    post = render(item)
+    lines = [line.strip() for line in post.splitlines() if line.strip()]
+
+    assert "..." not in post
+    assert "…" not in post
+    assert not lines[0].rstrip("</b>").endswith("конструкти")
+    assert not lines[1].endswith("че.")
+    assert lines[1].endswith(".")
+    assert "Дивитися в джерелі:" in post
+
+
+def test_ukraine_news_headline_does_not_end_with_dangling_connector() -> None:
+    item = NormalizedItem(
+        source_name="Liga",
+        title=(
+            "Президент Володимир Зеленський висловив сподівання щодо того, "
+            "що угорська позиція за нової влади буде конструктивною"
+        ),
+        url="https://example.com/hungary",
+        canonical_url="https://example.com/hungary",
+        raw_snippet=(
+            "Зеленський заявив, що Україна розраховує на прагматичну співпрацю "
+            "з новим керівництвом Угорщини."
+        ),
+        matched_entities=[],
+        category="politics",
+        fingerprint="hungary-position",
+        similarity_key="hungary position",
+    )
+
+    post = render(item)
+    first_line = next(line for line in post.splitlines() if line.strip())
+
+    assert "..." not in first_line
+    assert "…" not in first_line
+    assert "щодо того</b>" not in first_line
+    assert "Дивитися в джерелі:" in post
+
+
 def test_ukraine_news_post_includes_footer_and_source_link() -> None:
     item = NormalizedItem(
         source_name="NV",
