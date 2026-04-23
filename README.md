@@ -263,7 +263,7 @@ The publisher supports:
 - ad-slot insertion after every configured number of organic posts
 - HTML-safe Telegram formatting
 - source attribution
-- inline "Читати джерело" button
+- inline "Більше в джерелі" button
 - image-aware publishing: when a source provides an article/card image URL, Telegram sends a photo with the post as caption and falls back to text otherwise
 - message length guardrails
 

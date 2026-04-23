@@ -472,7 +472,7 @@ class RewriteService:
         if not item.url:
             return None
         source = self._clean_text(item.source_name) or "джерело"
-        return f'Дивитися в джерелі: <a href="{self._html_attr(item.url)}">{self._html(source)}</a>'
+        return f'Більше в джерелі: <a href="{self._html_attr(item.url)}">{self._html(source)}</a>'
 
     def _html(self, value: str) -> str:
         return html.escape(value or "", quote=False)

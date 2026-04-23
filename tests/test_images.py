@@ -1,3 +1,6 @@
+import asyncio
+from types import SimpleNamespace
+
 from app.models import NormalizedItem, RawItem, RelevanceResult
 from app.services.extractor import Extractor
 from app.services.publisher import Publisher
@@ -125,4 +128,37 @@ def test_photo_caption_keeps_source_link_when_truncated() -> None:
     caption = TelegramBotClient("", dry_run=True)._photo_caption("А" * 2000, "https://example.com/story")
 
     assert len(caption) <= 1024
-    assert "Читати джерело" in caption
+    assert "Більше в джерелі" in caption
+
+
+def test_send_message_falls_back_to_text_when_photo_fails() -> None:
+    class FakeBot:
+        def __init__(self) -> None:
+            self.photo_calls = 0
+            self.message_calls = 0
+
+        async def send_photo(self, **kwargs):
+            self.photo_calls += 1
+            raise RuntimeError("Failed to get http url content")
+
+        async def send_message(self, **kwargs):
+            self.message_calls += 1
+            return SimpleNamespace(message_id=123, chat_id="-1001")
+
+    client = TelegramBotClient("token", dry_run=False)
+    fake_bot = FakeBot()
+    client._bot = fake_bot
+
+    result = asyncio.run(
+        client.send_message(
+            chat_id="@topnewsuaUKR",
+            text="Новина",
+            source_url="https://example.com/story",
+            image_url="https://example.com/broken.jpg",
+        )
+    )
+
+    assert fake_bot.photo_calls == 1
+    assert fake_bot.message_calls == 1
+    assert result.sent is True
+    assert result.message_id == 123

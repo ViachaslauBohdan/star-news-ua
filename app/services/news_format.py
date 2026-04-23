@@ -483,7 +483,7 @@ def _source_link(item: NormalizedItem) -> str | None:
     if not item.url:
         return None
     source = " ".join((item.source_name or "").split()).strip() or "джерело"
-    return f'Дивитися в джерелі: <a href="{_html_attr(item.url)}">{_html(source)}</a>'
+    return f'Більше в джерелі: <a href="{_html_attr(item.url)}">{_html(source)}</a>'
 
 
 def build_news_blocks(item: NormalizedItem, title: str, facts: list[str], hashtag: str) -> list[str]:

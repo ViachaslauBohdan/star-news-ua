@@ -64,8 +64,8 @@ def test_news_fallback_does_not_repeat_title_three_times() -> None:
     assert "</b>" in post.splitlines()[0]
     assert "🔗 Джерело" not in post
     assert '<b><a href="https://t.me/topnewsuaUKR">TOPNEWS UA</a></b>' in post
-    assert 'Дивитися в джерелі: <a href="https://example.com/news">Ukrainska Pravda News</a>' in post
-    assert post.index("Дивитися в джерелі:") < post.index("TOPNEWS UA")
+    assert 'Більше в джерелі: <a href="https://example.com/news">Ukrainska Pravda News</a>' in post
+    assert post.index("Більше в джерелі:") < post.index("TOPNEWS UA")
     assert "https://example.com/news" in post
     assert "#політика" not in post
     assert "як повідомляє джерело" not in post
@@ -111,7 +111,7 @@ def test_ukraine_news_does_not_repeat_headline_as_body() -> None:
     assert title in lines[0]
     assert all(line != f"{title}." for line in lines[1:])
     assert post.count(title) == 1
-    assert "Дивитися в джерелі:" in post
+    assert "Більше в джерелі:" in post
 
 
 def test_ukraine_news_uses_real_supporting_detail_from_article() -> None:
@@ -161,7 +161,7 @@ def test_ukraine_news_uses_complete_lines_without_ellipsis() -> None:
     assert not lines[0].rstrip("</b>").endswith("конструкти")
     assert not lines[1].endswith("че.")
     assert lines[1].endswith(".")
-    assert "Дивитися в джерелі:" in post
+    assert "Більше в джерелі:" in post
 
 
 def test_ukraine_news_headline_does_not_end_with_dangling_connector() -> None:
@@ -189,7 +189,7 @@ def test_ukraine_news_headline_does_not_end_with_dangling_connector() -> None:
     assert "..." not in first_line
     assert "…" not in first_line
     assert "щодо того</b>" not in first_line
-    assert "Дивитися в джерелі:" in post
+    assert "Більше в джерелі:" in post
 
 
 def test_ukraine_news_post_includes_footer_and_source_link() -> None:
@@ -206,8 +206,8 @@ def test_ukraine_news_post_includes_footer_and_source_link() -> None:
     )
     post = render(item)
     assert '<b><a href="https://t.me/topnewsuaUKR">TOPNEWS UA</a></b>' in post
-    assert 'Дивитися в джерелі: <a href="https://example.com/nv/1">NV</a>' in post
-    assert post.index("Дивитися в джерелі:") < post.index("TOPNEWS UA")
+    assert 'Більше в джерелі: <a href="https://example.com/nv/1">NV</a>' in post
+    assert post.index("Більше в джерелі:") < post.index("TOPNEWS UA")
     assert "INSIDER UA" not in post
     assert "Прислать контент" not in post
     assert "Источник" not in post
@@ -236,7 +236,7 @@ def test_news_post_uses_strict_short_line_format() -> None:
     assert "<b>" in lines[0]
     assert "🔗 Джерело" not in post
     assert '<b><a href="https://t.me/topnewsuaUKR">TOPNEWS UA</a></b>' in post
-    assert 'Дивитися в джерелі: <a href="https://example.com/imf">Liga News</a>' in post
+    assert 'Більше в джерелі: <a href="https://example.com/imf">Liga News</a>' in post
     assert "https://example.com/imf" in post
     assert "#економіка" not in post
     assert "Йдеться про" not in post
@@ -283,7 +283,7 @@ def test_stars_post_uses_stars_template() -> None:
     assert post.startswith("😳<b>KAZKA: Олександра Заріцька показала результат схуднення</b>")
     assert "💬" not in post
     assert '<b><a href="https://t.me/uastarsnews">UA Stars News</a></b>' in post
-    assert 'Дивитися в джерелі: <a href="https://example.com/kazka">UNIAN Lite Stars</a>' in post
+    assert 'Більше в джерелі: <a href="https://example.com/kazka">UNIAN Lite Stars</a>' in post
     assert "#зірки" not in post
     assert "https://example.com/kazka" in post
     assert 3 <= len(content_lines) <= 6
@@ -408,7 +408,7 @@ def test_stars_post_empty_snippet_has_no_title_meta_fact_line() -> None:
 
     assert post.startswith("👀<b>Test Star:")
     assert "інфопривід у заголовку" not in post.casefold()
-    assert "Дивитися в джерелі:" in post
+    assert "Більше в джерелі:" in post
     assert "#зірки" not in post
 
 
@@ -432,5 +432,5 @@ def test_rewrite_removes_image_metadata_markers_from_post_text() -> None:
     assert "<b>" in post
     assert "🔗 Джерело" not in post
     assert "Йдеться про" not in post
-    assert "Дивитися в джерелі:" in post
+    assert "Більше в джерелі:" in post
     assert "https://example.com/tsn" in post
