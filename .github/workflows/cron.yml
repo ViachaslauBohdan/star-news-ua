@@ -20,7 +20,7 @@ jobs:
       AUTO_PUBLISH: "false"
       DRY_RUN: "false"
       PREVIEW_MODE: "false"
-      DELAYED_PUBLISH_SECONDS: "0"
+      DELAYED_PUBLISH_SECONDS: "600"
       MAX_PUBLISH_PER_RUN: "1"
     steps:
       - name: Checkout
@@ -56,7 +56,7 @@ jobs:
       AUTO_PUBLISH: "false"
       DRY_RUN: "false"
       PREVIEW_MODE: "false"
-      DELAYED_PUBLISH_SECONDS: "0"
+      DELAYED_PUBLISH_SECONDS: "600"
       MAX_PUBLISH_PER_RUN: "1"
     steps:
       - name: Checkout
